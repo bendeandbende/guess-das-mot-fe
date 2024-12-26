@@ -9,11 +9,14 @@ interface Player {
   name: string;
 }
 
-interface Game {
+export interface Game {
   id: string;
   players: Player[];
-  drawer: Player;
+  drawer: Player | null;
   word: string;
+  status: "INACTIVE" | "ACTIVE" | "PREPARING" | "DRAWING" | "FINISHED";
+  round: number;
+  drawingQueue: Player[];
 }
 
 interface DrawingStartedData {
@@ -26,15 +29,16 @@ const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isDrawer, setIsDrawer] = useState(false);
   const [word, setWord] = useState("");
+  const [game, setGame] = useState<Game | null>(null);
 
   useEffect(() => {
     socket.on("connect", () => {
       console.log("Connected to server");
     });
 
-    socket.on("gameUpdate", (game: Game) => {
-      console.log("Game update:", game);
-      setIsDrawer(game.drawer.id === socket.id);
+    socket.on("gameUpdate", (updatedGame: Game) => {
+      setGame(updatedGame);
+      setIsDrawer(updatedGame.drawer?.id === socket.id);
     });
 
     socket.on("drawingStarted", (data: DrawingStartedData) => {
@@ -51,6 +55,10 @@ const App: React.FC = () => {
   const joinGame = () => {
     socket.emit("joinGame", { gameId, playerName });
     setIsConnected(true);
+  };
+
+  const startGame = () => {
+    socket.emit("startGame", { gameId });
   };
 
   const startDrawing = () => {
@@ -77,7 +85,10 @@ const App: React.FC = () => {
         </div>
       ) : (
         <div>
-          {isDrawer && (
+          {game?.status === "INACTIVE" && (
+            <button onClick={startGame}>Start Game</button>
+          )}
+          {isDrawer && game?.status === "PREPARING" && (
             <div>
               <input
                 type="text"
@@ -88,7 +99,17 @@ const App: React.FC = () => {
               <button onClick={startDrawing}>Start Drawing</button>
             </div>
           )}
-          <DrawingBoard gameId={gameId} socket={socket} />
+          <div>
+            <p>Round: {game?.round}</p>
+            <p>Current Drawer: {game?.drawer?.name}</p>
+            <p>Status: {game?.status}</p>
+          </div>
+          <DrawingBoard
+            gameId={gameId}
+            socket={socket}
+            isCurrentDrawer={isDrawer}
+            gameStatus={game?.status || ""}
+          />
         </div>
       )}
     </div>
